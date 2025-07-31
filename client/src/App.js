@@ -2,8 +2,11 @@ import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
-import Predict from './pages/Predict';
 import Visualize from './pages/Visualize';
+import CsvUpload from './CsvUpload';
+
+
+
 
 function App() {
   return (
@@ -11,11 +14,21 @@ function App() {
       <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/predict" element={<Predict />} />
+        <Route path="/upload" element={<CsvUpload />} />
         <Route path="/visualize" element={<Visualize />} />
       </Routes>
     </div>
   );
 }
+
+
+// function App() {
+//   return (
+//     <div className="min-h-screen bg-primary text-white font-rubik flex items-center justify-center">
+//       <h1 className="text-4xl font-slab text-highlight animate-bounce">Tailwind is working! 🎉</h1>
+//     </div>
+//   );
+// }
+
 
 export default App;
