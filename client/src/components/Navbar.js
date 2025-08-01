@@ -12,6 +12,8 @@ function Navbar() {
           <Link to="/" className="hover:text-highlight">Home</Link>
           <Link to="/upload" className="hover:text-highlight">Upload</Link>
           <Link to="/visualize" className="hover:text-highlight">Visualize</Link>
+          <Link to="/ml-algorithms" className="mr-6 text-white">ML Algorithms</Link>
+
         </div>
       </div>
     </nav>

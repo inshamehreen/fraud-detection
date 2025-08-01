@@ -4,7 +4,7 @@ import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Visualize from './pages/Visualize';
 import CsvUpload from './CsvUpload';
-
+import MLAlgorithms from './pages/MLAlgorithms';
 
 
 
@@ -16,6 +16,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/upload" element={<CsvUpload />} />
         <Route path="/visualize" element={<Visualize />} />
+        <Route path="/ml-algorithms" element={<MLAlgorithms />} />
       </Routes>
     </div>
   );
