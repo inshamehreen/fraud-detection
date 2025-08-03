@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ChartDisplay from '../components/ChartDisplay';
+import { motion } from 'framer-motion';
 
 function Visualize() {
   const [chartType, setChartType] = useState('bar');
@@ -37,10 +38,10 @@ function Visualize() {
   };
 
   return (
-    <div className="p-6 min-h-screen bg-[#113f67] text-white font-rubik">
-      <h2 className="text-3xl font-alfa mb-6">Data Visualization</h2>
+    <div className="min-h-screen bg-[#113f67] text-white font-rubik p-6 flex flex-col items-center">
+      <h2 className="text-3xl font-alfa mb-6 text-center">Data Visualization</h2>
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
         <button
           onClick={toggleChartType}
           className="bg-[#34699a] hover:bg-[#58a0c8] text-white font-semibold py-2 px-4 rounded transition duration-300"
@@ -56,7 +57,15 @@ function Visualize() {
         </button>
       </div>
 
-      <ChartDisplay chartType={chartType} chartData={chartData} />
+      {/* Animate Chart */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="w-full max-w-4xl bg-[#fdf5aa] rounded-lg shadow-lg p-4"
+      >
+        <ChartDisplay chartType={chartType} chartData={chartData} />
+      </motion.div>
     </div>
   );
 }

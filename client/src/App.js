@@ -5,7 +5,7 @@ import Home from './pages/Home';
 import Visualize from './pages/Visualize';
 import CsvUpload from './CsvUpload';
 import MLAlgorithms from './pages/MLAlgorithms';
-
+import Explain from './pages/Explain';
 
 
 function App() {
@@ -17,6 +17,7 @@ function App() {
         <Route path="/upload" element={<CsvUpload />} />
         <Route path="/visualize" element={<Visualize />} />
         <Route path="/ml-algorithms" element={<MLAlgorithms />} />
+        <Route path="/explain" element={<Explain />} />
       </Routes>
     </div>
   );
