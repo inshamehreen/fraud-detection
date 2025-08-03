@@ -19,6 +19,8 @@ with open(r'D:\fraud-detection\backend\model\xgboost_model.pkl', 'rb') as f:
 # SHAP explainer
 explainer = shap.Explainer(model)
 
+UPLOAD_PATH = 'uploads/last_uploaded.csv'
+
 @app.route('/predict-csv', methods=['POST'])
 def predict_csv():
     if 'file' not in request.files:
@@ -26,11 +28,27 @@ def predict_csv():
     file = request.files['file']
     df = pd.read_csv(file)
 
+    # Save uploaded file for visualization
+    os.makedirs('uploads', exist_ok=True)
+    df.to_csv(UPLOAD_PATH, index=False)
+
     if 'Class' in df.columns:
         df = df.drop(columns=['Class'])
 
     predictions = model.predict(df)
     return jsonify({'predictions': predictions.tolist()})
+
+
+@app.route('/get-csv-data', methods=['GET'])
+def get_csv_data():
+    if not os.path.exists(UPLOAD_PATH):
+        return jsonify({'error': 'CSV file not found'}), 404
+
+    try:
+        df = pd.read_csv(UPLOAD_PATH)
+        return df.to_json(orient='records')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/explain-csv', methods=['POST'])
@@ -40,7 +58,10 @@ def explain_csv():
     file = request.files['file']
     df = pd.read_csv(file)
 
-    # Drop target column if present
+    # Save uploaded file for reuse
+    os.makedirs('uploads', exist_ok=True)
+    df.to_csv(UPLOAD_PATH, index=False)
+
     has_label = False
     if 'Class' in df.columns:
         labels = df['Class']
@@ -52,7 +73,6 @@ def explain_csv():
     # Compute SHAP values
     shap_values = explainer(df)
 
-    # Create directory
     output_dir = os.path.join("shap_htmls", str(uuid.uuid4()))
     os.makedirs(output_dir, exist_ok=True)
 
@@ -67,7 +87,6 @@ def explain_csv():
         web_path = output_path.replace("\\", "/")
         shap_htmls.append(f"http://localhost:5000/{web_path}")
 
-        # Basic natural language explanation
         top_indices = np.argsort(np.abs(shap_values[i].values))[-3:]
         explanation = ", ".join(
             f"{df.columns[j]} contributed {'positively' if shap_values[i].values[j] > 0 else 'negatively'}"
@@ -75,7 +94,6 @@ def explain_csv():
         )
         natural_explanations.append(f"Top contributing features: {explanation}.")
 
-    # SHAP summary plot
     summary_dir = "shap_plots"
     os.makedirs(summary_dir, exist_ok=True)
     summary_path = os.path.join(summary_dir, 'shap_summary.png')
@@ -83,7 +101,6 @@ def explain_csv():
     plt.savefig(summary_path, bbox_inches='tight')
     plt.close()
 
-    # Fraud vs Non-Fraud comparison
     compare_url = None
     if has_label:
         fraud_shap = shap_values.values[labels == 1].mean(axis=0)
