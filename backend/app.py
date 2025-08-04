@@ -8,35 +8,78 @@ import os
 import uuid
 import xgboost as xgb
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+import joblib
+
 
 app = Flask(__name__)
 CORS(app)
 
-# Load model
-with open(r'D:\fraud-detection\backend\model\xgboost_model.pkl', 'rb') as f:
-    model = pickle.load(f)
 
-# SHAP explainer
-explainer = shap.Explainer(model)
+UPLOAD_PATH = r'D:\fraud-detection\backend\uploaded_data.csv'
+MODEL_PATH = r'D:\fraud-detection\backend\model\xgboost_model.pkl'
+SCALER_PATH = r'D:\fraud-detection\backend\model\scaler.pkl'
 
-UPLOAD_PATH = 'uploads/last_uploaded.csv'
+# # Load model and scaler once
+# models_path = r'D:\fraud-detection\backend\model'
+# with open(os.path.join(models_path, 'xgboost_model.pkl'), 'rb') as f:
+#     model = pickle.load(f)
+
+# with open(os.path.join(models_path, 'scaler.pkl'), 'rb') as f:
+#     scaler = pickle.load(f)
 
 @app.route('/predict-csv', methods=['POST'])
 def predict_csv():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-    file = request.files['file']
-    df = pd.read_csv(file)
+    try:
+        # Load files
+        model = joblib.load(r'D:\fraud-detection\backend\model\xgboost_model.pkl')
+        scaler = joblib.load(r'D:\fraud-detection\backend\model\scaler.pkl')
+        feature_columns = joblib.load(r'D:\fraud-detection\backend\model\feature_columns.pkl')
 
-    # Save uploaded file for visualization
-    os.makedirs('uploads', exist_ok=True)
-    df.to_csv(UPLOAD_PATH, index=False)
+        # Get uploaded CSV
+        file = request.files['file']
+        df = pd.read_csv(file)
+        
+        # 🆕 SAVE THE UPLOADED CSV FOR VISUALIZATION
+        df.to_csv(UPLOAD_PATH, index=False)
 
-    if 'Class' in df.columns:
-        df = df.drop(columns=['Class'])
+        # Drop 'Class' if it exists (only for prediction)
+        if 'Class' in df.columns:
+            df = df.drop('Class', axis=1)
 
-    predictions = model.predict(df)
-    return jsonify({'predictions': predictions.tolist()})
+        # Ensure same feature order
+        df = df[feature_columns]
+
+        # Scale input
+        scaled_data = scaler.transform(df)
+
+        # Get fraud probabilities
+        fraud_probabilities = model.predict_proba(scaled_data)[:, 1]
+        
+        # Use optimal threshold
+        optimal_threshold = 0.00001  # Your working threshold
+        predictions = (fraud_probabilities > optimal_threshold).astype(int)
+
+        # After making predictions in /predict-csv route:
+        df['Class'] = predictions  # Add predictions as new column
+
+        df.to_csv(UPLOAD_PATH, index=False)  # Save CSV for visualization
+
+        
+        num_fraud = int((predictions == 1).sum())
+        num_non_fraud = int((predictions == 0).sum())
+
+        return jsonify({
+            'predictions': predictions.tolist(),
+            'probabilities': fraud_probabilities.tolist(),
+            'threshold_used': optimal_threshold,
+            'num_fraud': num_fraud,
+            'num_non_fraud': num_non_fraud
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 
 @app.route('/get-csv-data', methods=['GET'])
