@@ -10,6 +10,9 @@ import xgboost as xgb
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 import joblib
+import io
+import base64
+import tempfile
 
 
 app = Flask(__name__)
@@ -93,92 +96,52 @@ def get_csv_data():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+FEATURE_COLUMNS_PATH = r'D:\fraud-detection\backend\model\feature_columns.pkl'  # ✅ fixed
 
 @app.route('/explain-csv', methods=['POST'])
 def explain_csv():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-    file = request.files['file']
-    df = pd.read_csv(file)
+    try:
+        model = joblib.load(r'D:\fraud-detection\backend\model\xgboost_model.pkl')
+        scaler = joblib.load(r'D:\fraud-detection\backend\model\scaler.pkl')
+        feature_columns = joblib.load(r'D:\fraud-detection\backend\model\feature_columns.pkl')
 
-    # Save uploaded file for reuse
-    os.makedirs('uploads', exist_ok=True)
-    df.to_csv(UPLOAD_PATH, index=False)
+        file = request.files['file']
+        df = pd.read_csv(file)
 
-    has_label = False
-    if 'Class' in df.columns:
-        labels = df['Class']
-        has_label = True
-        df = df.drop(columns=['Class'])
-    else:
-        labels = None
+        if "Class" in df.columns:
+            df = df.drop("Class", axis=1)
 
-    # Compute SHAP values
-    shap_values = explainer(df)
+        df = df[feature_columns]
+        scaled_data = scaler.transform(df)
+        scaled_df = pd.DataFrame(scaled_data, columns=feature_columns)
 
-    output_dir = os.path.join("shap_htmls", str(uuid.uuid4()))
-    os.makedirs(output_dir, exist_ok=True)
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(scaled_df)
 
-    shap_htmls = []
-    natural_explanations = []
+        rowwise_explanations = []
 
-    for i in range(len(df)):
-        output_path = os.path.join(output_dir, f"shap_{i}.html")
-        shap_html = shap.plots.force(shap_values[i], matplotlib=False, show=False)
-        shap.save_html(output_path, shap_html)
+        for i in range(min(len(scaled_df), 20)):
+            pred = model.predict([scaled_df.iloc[i]])[0]
+            pred_label = "Fraud" if pred == 1 else "Not Fraud"
 
-        web_path = output_path.replace("\\", "/")
-        shap_htmls.append(f"http://localhost:5000/{web_path}")
+            # Create dict of feature contributions
+            feature_contribs = {
+                feature: float(shap_values[i][j])
+                for j, feature in enumerate(feature_columns)
+            }
 
-        top_indices = np.argsort(np.abs(shap_values[i].values))[-3:]
-        explanation = ", ".join(
-            f"{df.columns[j]} contributed {'positively' if shap_values[i].values[j] > 0 else 'negatively'}"
-            for j in reversed(top_indices)
-        )
-        natural_explanations.append(f"Top contributing features: {explanation}.")
+            rowwise_explanations.append({
+                "row": i + 1,
+                "prediction": pred_label,
+                "contributions": feature_contribs
+            })
 
-    summary_dir = "shap_plots"
-    os.makedirs(summary_dir, exist_ok=True)
-    summary_path = os.path.join(summary_dir, 'shap_summary.png')
-    shap.plots.beeswarm(shap_values, show=False)
-    plt.savefig(summary_path, bbox_inches='tight')
-    plt.close()
+        return jsonify({"rows": rowwise_explanations})
 
-    compare_url = None
-    if has_label:
-        fraud_shap = shap_values.values[labels == 1].mean(axis=0)
-        nonfraud_shap = shap_values.values[labels == 0].mean(axis=0)
-        diff = fraud_shap - nonfraud_shap
-        top_features = np.argsort(np.abs(diff))[-10:]
-
-        plt.figure(figsize=(8, 5))
-        plt.barh(range(len(top_features)), diff[top_features])
-        plt.yticks(range(len(top_features)), [df.columns[i] for i in top_features])
-        plt.xlabel("Avg SHAP(Fraud) - Avg SHAP(Non-Fraud)")
-        plt.title("Feature Importance Contrast")
-        compare_path = os.path.join(output_dir, "fraud_vs_nonfraud.png")
-        plt.tight_layout()
-        plt.savefig(compare_path)
-        plt.close()
-        compare_url = f"http://localhost:5000/{compare_path.replace(os.sep, '/')}"
-
-    return jsonify({
-        'shap_htmls': shap_htmls,
-        'natural_explanations': natural_explanations,
-        'summary_plot': f"http://localhost:5000/{summary_path.replace(os.sep, '/')}",
-        'compare_plot': compare_url
-    })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/shap_htmls/<path:filename>')
-def serve_html(filename):
-    return send_file(f"shap_htmls/{filename}")
 
-
-@app.route('/shap_plots/<path:filename>')
-def serve_plot(filename):
-    return send_file(f"shap_plots/{filename}")
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)

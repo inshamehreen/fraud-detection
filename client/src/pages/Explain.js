@@ -1,12 +1,22 @@
-import React, { useState } from 'react';
-import axios from 'axios';
-import { motion } from 'framer-motion';
+import React, { useState } from "react";
+import axios from "axios";
+import { motion } from "framer-motion";
+import { Bar } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 const Explain = () => {
   const [file, setFile] = useState(null);
-  const [htmlContent, setHtmlContent] = useState('');
-  const [summaryImage, setSummaryImage] = useState('');
-  const [comparisonImage, setComparisonImage] = useState('');
+  const [rows, setRows] = useState([]);
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
@@ -14,83 +24,79 @@ const Explain = () => {
 
   const handleUpload = async () => {
     if (!file) return;
-
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
     try {
-      const response = await axios.post('http://localhost:5000/explain-csv', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const response = await axios.post("http://localhost:5000/explain-csv", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
-
-      setHtmlContent(response.data.html_content);
-      setSummaryImage(response.data.summary_plot);
-      setComparisonImage(response.data.comparison_plot);
+      setRows(response.data.rows || []);
     } catch (error) {
-      console.error('Upload failed:', error);
+      console.error("Upload failed:", error);
     }
   };
 
   return (
     <div className="min-h-screen bg-primary text-black font-rubik px-4 py-10">
       <motion.div
-        className="bg-white rounded-lg shadow-xl p-8 max-w-4xl mx-auto"
+        className="bg-white rounded-lg shadow-xl p-8 max-w-6xl mx-auto"
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        <h1 className="text-3xl font-slab text-secondary mb-6 animate-slide-in-down">
+        <h1 className="text-3xl font-slab text-secondary mb-6">
           📊 SHAP Explanation Dashboard
         </h1>
-
-        <p className="text-md mb-6">
-          SHAP (SHapley Additive exPlanations) helps interpret why the model flagged a transaction as fraudulent. It assigns contribution values to each feature for every prediction, revealing what influenced the model’s decision.
-        </p>
-
-        <h2 className="text-xl font-slab text-secondary mb-2 animate-slide-in-left">
-          💡 How do SHAP values work?
-        </h2>
-
-        <ul className="list-disc list-inside mb-4">
-          <li><b>👉 Positive contribution</b> → pushes the model toward predicting fraud.</li>
-          <li><b>👉 Negative contribution</b> → pushes it toward predicting non-fraud.</li>
-        </ul>
-
-        <p className="italic text-gray-600 mb-6">E.g., a high amount at odd hours could increase suspicion.</p>
 
         <input type="file" onChange={handleFileChange} className="mb-4" />
         <br />
         <button
           onClick={handleUpload}
-          className="bg-primary text-white px-5 py-2 rounded-md hover:bg-secondary transition duration-300 animate-pulse"
+          className="bg-primary text-white px-5 py-2 rounded-md hover:bg-secondary transition duration-300"
         >
-          Upload and Explain
+          Upload & Explain
         </button>
 
-        {htmlContent && (
+        {rows.length > 0 && (
           <div className="mt-10">
-            <h2 className="text-xl font-slab text-highlight mb-2 animate-slide-in-up">
-              🔍 Prediction Explanations
-            </h2>
-            <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
-          </div>
-        )}
+            {rows.map((row, idx) => {
+              const labels = Object.keys(row.contributions);
+              const values = Object.values(row.contributions);
 
-        {summaryImage && (
-          <div className="mt-10">
-            <h2 className="text-xl font-slab text-highlight mb-2 animate-slide-in-up">
-              📌 SHAP Summary Plot
-            </h2>
-            <img src={`data:image/png;base64,${summaryImage}`} alt="SHAP Summary Plot" className="rounded shadow-md" />
-          </div>
-        )}
+              const chartData = {
+                labels,
+                datasets: [
+                  {
+                    label: "SHAP Contribution",
+                    data: values,
+                    backgroundColor: values.map((v) =>
+                      v >= 0 ? "rgba(75, 192, 192, 0.6)" : "rgba(255, 99, 132, 0.6)"
+                    ),
+                  },
+                ],
+              };
 
-        {comparisonImage && (
-          <div className="mt-10">
-            <h2 className="text-xl font-slab text-highlight mb-2 animate-slide-in-up">
-              ⚖️ Fraud vs Non-Fraud Comparison
-            </h2>
-            <img src={`data:image/png;base64,${comparisonImage}`} alt="SHAP Comparison Plot" className="rounded shadow-md" />
+              const options = {
+                responsive: true,
+                plugins: {
+                  legend: { display: false },
+                  title: { display: true, text: `Row ${row.row} - ${row.prediction}` },
+                },
+              };
+
+              return (
+                <div key={idx} className="mt-8 p-4 border rounded bg-gray-50 shadow-md">
+                  <h3 className="text-lg font-semibold mb-2">
+                    Row {row.row} → Prediction:{" "}
+                    <span className={row.prediction === "Fraud" ? "text-red-600" : "text-green-600"}>
+                      {row.prediction}
+                    </span>
+                  </h3>
+                  <Bar data={chartData} options={options} />
+                </div>
+              );
+            })}
           </div>
         )}
       </motion.div>
